@@ -1,0 +1,18 @@
+__pycache__
+Generate3D/threestudio/output*
+Generate3D/threestudio/.threestudio_cache
+Generate3D/threestudio/load/zero123/stable_zero123.ckpt
+Eval3D/semantic_consistency/FeatUp
+Eval3D/structural_consistency/models
+
+# Hugging Face cache directories (contain tokens)
+hf_*
+.venv/
+
+# Python virtual environments
+venv/
+env/
+ENV/
+
+# Log files
+*.log

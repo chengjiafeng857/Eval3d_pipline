@@ -85,21 +85,27 @@ export OPENAI_API_KEY=your_key_here
 ### Basic Usage
 
 ```bash
-# Evaluate a single mesh with all metrics
+# Evaluate a single mesh with all metrics (includes Text-3D Alignment + Suggestion)
 cd eval3d-pipeline
 uv run eval3d-pipeline eval-mesh ./robot.obj \
     --algo my_method \
     --prompt "a robot holding a sword"
 
-# Quick evaluation (aesthetics + text-3D only)
+# Quick evaluation (text metrics + aesthetics only; faster)
 uv run eval3d-pipeline eval-mesh ./model.obj --quick
+
+# Text-only check (Alignment + Suggestion) to iterate on prompt/asset quickly
+uv run eval3d-pipeline eval-mesh ./model.obj \
+    --prompt "a robot holding a sword" \
+    -m text3d
 
 # Specific metrics only
 uv run eval3d-pipeline eval-mesh ./model.obj \
-    -m geometric -m semantic -m aesthetics
+    -m text3d -m geometric -m semantic -m aesthetics
 ```
 
-> Text-3D Suggestion runs alongside Text-3D Alignment. When text metrics are enabled (default), you’ll get both the numeric score and prioritized fix suggestions.
+> Text-3D Suggestion always runs alongside Text-3D Alignment when `-m text3d` is included (default). Use `--quick` for fast prompt/asset iteration focusing on text and aesthetics. Use `-m text3d` alone when you only need alignment and suggestion feedback before re-rendering.  
+> Example (Suggestion/Alignment only): `uv run eval3d-pipeline eval-mesh ./model.obj --prompt "a robot holding a sword" -m text3d`
 
 ### Example Output
 

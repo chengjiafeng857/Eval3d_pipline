@@ -146,14 +146,15 @@ Results saved to: ./data/my_method/robot/eval3d_scores.json
 
 ### 1. **Text-3D Suggestion Metric** (Highest Priority, Qualitative Assist)
 
-**What it measures:** Prompt-grounded failure hints that tell you what visual details to improve.
+**What it measures:** Full-scene prompt adherence plus concrete fixes (geometry, texture, multi-view consistency, semantics).
 
 **How it works:**
-1. Reuses the same question set and VLM answers from Text-3D Alignment.
-2. For each "no" answer, asks the model to propose concrete fixes (e.g., "add a clear sword handle", "place the cellphone in the dog's paw").
-3. Surfaces the top 3-5 suggestions to guide artists toward higher alignment.
+1. Extracts key frames from `video/turntable.mp4` (default 12) into `suggestion_frames/`.
+2. Auto-generates prompt-specific questions (fallback if prompt missing).
+3. Runs GPT-5.1 on the frames to score and summarize issues across geometry, texture, consistency, and prompt features.
+4. Writes `text3d_suggestions.json` with prioritized fixes and saves the inspected frames.
 
-**How to use it:** Run it with every asset; address the top suggestions first, then re-run alignment to see numeric gains.
+**How to use it:** Run it for every asset; apply the top suggestions, then rerun Text-3D Alignment to verify the numeric lift.
 
 ---
 

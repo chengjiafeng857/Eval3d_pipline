@@ -13,7 +13,7 @@ This repository extends the original Eval3D research codebase into a **productio
 
 ✅ **Universal Mesh Support** - Evaluate `.obj`, `.glb`, `.ply`, `.stl`, `.obx` files from any 3D generator  
 ✅ **Automated Pipeline** - Single command: mesh in → scores out  
-✅ **Text-3D Modeling Suggestion** - Using AI-Agent to Generate prompt-grounded fixes based on flaws detected on 3d-model
+✅ **Text-3D Modeling Suggestion** - Using AI-Agent to Generate prompt-grounded fixes based on flaws on 3D model
 ✅ **5 Core Metrics** - Geometric, Semantic, Structural, Aesthetic, and Text-3D Alignment (quantitative)  
 ✅ **No Threestudio Required** - Automatically generates all required intermediate data  
 ✅ **CLI Interface** - Simple commands for quick evaluation  

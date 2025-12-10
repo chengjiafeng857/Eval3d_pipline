@@ -102,11 +102,13 @@ uv run eval3d-pipeline eval-mesh ./model.obj \
 # Specific metrics only
 uv run eval3d-pipeline eval-mesh ./model.obj \
     -m text3d -m geometric -m semantic -m aesthetics
+
+
+##Text-3D Suggestion always runs alongside Text-3D Alignment when `-m text3d` is included (default). Use `--quick` for fast prompt/asset iteration focusing on text and aesthetics. Use `-m text3d` alone then run suggest cli when you only need alignment and suggestion feedback before re-rendering.  
+##Example (Suggestion/Alignment only): 
+uv run eval3d-pipeline suggest data/my_algo/_1209214233_texture --prompt "A young male sci-fi character with a tall, slim build wearing a long dark coat over black body armor, color palette dark grey and black with teal glowing lines and small orange accents. One arm is fully mechanical with exposed cables and teal lights, the other arm is human with a small cybernetic node, and he wears armored boots and a belt with a rectangular tech device on his hip."
+
 ```
-
-> Text-3D Suggestion always runs alongside Text-3D Alignment when `-m text3d` is included (default). Use `--quick` for fast prompt/asset iteration focusing on text and aesthetics. Use `-m text3d` alone when you only need alignment and suggestion feedback before re-rendering.  
-> Example (Suggestion/Alignment only): `uv run eval3d-pipeline eval-mesh ./model.obj --prompt "a robot holding a sword" -m text3d`
-
 ### Example Output
 
 ```

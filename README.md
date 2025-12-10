@@ -1,6 +1,6 @@
 # Eval3D Pipeline: Complete 3D Asset Evaluation System
 
-> **Based on the original [Eval3D: Interpretable and Fine-grained Evaluation for 3D Generation](https://github.com/eval3d/eval3d-codebase)**  
+> **Based on this original repo [Eval3D: Interpretable and Fine-grained Evaluation for 3D Generation](https://github.com/eval3d/eval3d-codebase)**  
 > Original paper by Duggal et al. | CVPR 2025
 
 ---

@@ -440,6 +440,9 @@ If you use this pipeline, please cite the original Eval3D paper:
 
 This project extends the original Eval3D codebase. Please refer to the original repository for license details.
 
+This project is licensed under the MIT License — see the [LICENSE](./LICENSE) file for details.
+
+
 ---
 
 ## 🔗 Links

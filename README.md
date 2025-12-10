@@ -146,15 +146,21 @@ Results saved to: ./data/my_method/robot/eval3d_scores.json
 
 ### 1. **Text-3D Suggestion Metric** (Highest Priority, Qualitative Assist)
 
-**What it measures:** Full-scene prompt adherence plus concrete fixes (geometry, texture, multi-view consistency, semantics).
+**What it measures:** Comprehensive 3D model quality with actionable improvement suggestions across five dimensions.
 
 **How it works:**
-1. Extracts key frames from `video/turntable.mp4` (default 12) into `suggestion_frames/`.
-2. Auto-generates prompt-specific questions (fallback if prompt missing).
-3. Runs GPT-5.1 on the frames to score and summarize issues across geometry, texture, consistency, and prompt features.
-4. Writes `text3d_suggestions.json` with prioritized fixes and saves the inspected frames.
+1. Extracts 12 key frames from `video/turntable.mp4` into `suggestion_frames/`.
+2. Auto-generates 3 prompt-specific evaluation questions using GPT (e.g., "Does the robot have a clearly defined sword?").
+3. Sends 6 representative frames (high-detail) to GPT-4o for comprehensive analysis covering:
+   - **Geometry Flaws** — mesh quality, topology issues, proportions, missing parts
+   - **Texture & Material Flaws** — UV stretching, seams, color bleeding, resolution
+   - **Multi-View Consistency** — Janus face detection, backside quality, view-dependent artifacts
+   - **Semantic Reasonableness** — physically plausible, natural pose, uncanny valley
+   - **Prompt-Specific Evaluation** — scored answers to the auto-generated questions
+4. Returns per-section scores (0-10) and prioritized fix suggestions.
+5. Saves results to `text3d_suggestions.json` with full analysis; frames kept for inspection.
 
-**How to use it:** Run it for every asset; apply the top suggestions, then rerun Text-3D Alignment to verify the numeric lift.
+**How to use it:** Run `suggest` command for every asset; address top suggestions first, then rerun Text-3D Alignment to verify numeric improvement.
 
 ---
 

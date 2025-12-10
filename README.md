@@ -13,7 +13,8 @@ This repository extends the original Eval3D research codebase into a **productio
 
 ✅ **Universal Mesh Support** - Evaluate `.obj`, `.glb`, `.ply`, `.stl`, `.obx` files from any 3D generator  
 ✅ **Automated Pipeline** - Single command: mesh in → scores out  
-✅ **5 Comprehensive Metrics** - Geometric, Semantic, Structural, Aesthetic, and Text-3D alignment  
+✅ **Text-3D Modeling Suggestion** - Using AI-Agent to Generate prompt-grounded fixes based on flaws detected on 3d-model
+✅ **5 Core Metrics** - Geometric, Semantic, Structural, Aesthetic, and Text-3D Alignment (quantitative)  
 ✅ **No Threestudio Required** - Automatically generates all required intermediate data  
 ✅ **CLI Interface** - Simple commands for quick evaluation  
 ✅ **Batch Processing** - Evaluate multiple assets efficiently  
@@ -35,7 +36,7 @@ Eval3d_pipline/
 │   │           ├── semantic.py        # Semantic consistency
 │   │           ├── structural.py      # Structural consistency
 │   │           ├── aesthetics.py      # Aesthetic quality
-│   │           └── text3d.py          # Text-3D alignment
+│   │           └── text3d.py          # Text-3D alignment + suggestion generation
 │   ├── pyproject.toml
 │   └── README.md
 │
@@ -97,6 +98,8 @@ uv run eval3d-pipeline eval-mesh ./model.obj \
     -m geometric -m semantic -m aesthetics
 ```
 
+> Text-3D Suggestion runs alongside Text-3D Alignment. When text metrics are enabled (default), you’ll get both the numeric score and prioritized fix suggestions.
+
 ### Example Output
 
 ```
@@ -116,6 +119,11 @@ Algorithm: my_method
 │ Structural Consist.   │ N/A       │ ⚠️  Zero123 not setup  │
 └───────────────────────┴───────────┴────────────────────────┘
 
+Text-3D Suggestion (priority output):  
+• Add a clearer sword handle;  
+• Keep the robot gripping the sword;  
+• Ensure the sword is metallic and centered in-hand.
+
 Results saved to: ./data/my_method/robot/eval3d_scores.json
 ```
 
@@ -123,7 +131,44 @@ Results saved to: ./data/my_method/robot/eval3d_scores.json
 
 ## 📊 Understanding the Metrics
 
-### 1. **Geometric Consistency** (Higher is Better, 0-100)
+![Eval3D Overall Architecture](./assets/architecture.png)
+
+**Most important:** The new Text-3D Suggestion Metric comes first; use it before any rerendering to know exactly what to fix.
+
+### 1. **Text-3D Suggestion Metric** (Highest Priority, Qualitative Assist)
+
+**What it measures:** Prompt-grounded failure hints that tell you what visual details to improve.
+
+**How it works:**
+1. Reuses the same question set and VLM answers from Text-3D Alignment.
+2. For each "no" answer, asks the model to propose concrete fixes (e.g., "add a clear sword handle", "place the cellphone in the dog's paw").
+3. Surfaces the top 3-5 suggestions to guide artists toward higher alignment.
+
+**How to use it:** Run it with every asset; address the top suggestions first, then re-run alignment to see numeric gains.
+
+---
+
+### 2. **Text-3D Alignment (Quantitative)** (Higher is Better, 0-1)
+
+**What it measures:** How well the 3D asset matches the text prompt via targeted question answering over rendered views.
+
+**How it works:**
+1. Generates 5-10 focused yes/no questions from the prompt (e.g., "Is there a robot?", "Is it holding a sword?").
+2. Uses the turntable frames and a VLM (GPT-4o/LLaVA) to answer both image-grounded and text-grounded variants of the questions (as shown in the architecture diagram).
+3. Score = fraction of "yes" answers across the question set.
+
+**Good scores:** 0.8+ means strong prompt adherence across views  
+**Poor scores:** <0.5 indicates missing or incorrect semantic content
+
+**Example questions for "a robot holding a sword":**
+- Is there a robot visible in the images?
+- Is the robot holding an object?
+- Is the object a sword or blade?
+- Does the robot appear to be gripping the sword?
+
+---
+
+### 3. **Geometric Consistency** (Higher is Better, 0-100)
 
 **What it measures:** Alignment between rendered surface normals and depth-predicted normals
 
@@ -140,7 +185,7 @@ Results saved to: ./data/my_method/robot/eval3d_scores.json
 
 ---
 
-### 2. **Semantic Consistency** (Higher is Better, 0-100)
+### 4. **Semantic Consistency** (Higher is Better, 0-100)
 
 **What it measures:** Visual identity consistency across different viewpoints
 
@@ -162,7 +207,7 @@ Results saved to: ./data/my_method/robot/eval3d_scores.json
 
 ---
 
-### 3. **Structural Consistency** (Higher is Better, 0-100)
+### 5. **Structural Consistency** (Higher is Better, 0-100)
 
 **What it measures:** Novel view synthesis quality using Zero123
 
@@ -180,7 +225,7 @@ Results saved to: ./data/my_method/robot/eval3d_scores.json
 
 ---
 
-### 4. **Aesthetics** (Higher is Better, 0-1)
+### 6. **Aesthetics** (Higher is Better, 0-1)
 
 **What it measures:** Visual appeal and image quality
 
@@ -198,27 +243,6 @@ Results saved to: ./data/my_method/robot/eval3d_scores.json
 - Good lighting and shading
 - Realistic materials
 - No visible artifacts or holes
-
----
-
-### 5. **Text-3D Alignment** (Higher is Better, 0-1)
-
-**What it measures:** How well the 3D asset matches the text prompt
-
-**How it works:**
-1. Generates 5-10 yes/no questions about the prompt (e.g., "Is there a robot?", "Is it holding a sword?")
-2. Shows turntable video frames to GPT-4o
-3. GPT-4o answers each question
-4. Score = fraction of "yes" answers
-
-**Good scores:** 0.8+ means strong text adherence  
-**Poor scores:** <0.5 indicates missing or incorrect semantic content
-
-**Example questions for "a robot holding a sword":**
-- Is there a robot visible in the images?
-- Is the robot holding an object?
-- Is the object a sword or blade?
-- Does the robot appear to be gripping the sword?
 
 ---
 
@@ -327,11 +351,12 @@ Instead of training a single "3D quality predictor," Eval3D uses:
 
 | Metric | Models/Tools Used | Consistency Measured |
 |--------|------------------|---------------------|
+| Text-3D Suggestion | GPT-4o / LLaVA | Prompt-grounded fixes (qualitative, highest priority) |
 | Geometric | Mesh Renderer + DepthAnything | Geometric normals ↔ Depth normals |
 | Semantic | DINO (ViT-B/14) + FeatUp | Feature identity across views |
 | Structural | Zero123 (novel view synthesis) | Predicted views ↔ Actual views |
 | Aesthetics | ImageReward (BLIP + RLHF) | Human preference alignment |
-| Text-3D | GPT-4o (VLM) | Language ↔ Visual content |
+| Text-3D Alignment | GPT-4o (VLM) | Language ↔ Visual content |
 
 ### Why This Works
 
@@ -355,7 +380,7 @@ Instead of training a single "3D quality predictor," Eval3D uses:
 - **Semantic:** FeatUp, DINO (auto-downloaded)
 - **Structural:** Stable Zero123 checkpoint (manual download, 3GB)
 - **Aesthetics:** ImageReward (auto-downloaded)
-- **Text-3D:** OpenAI API key
+- **Text-3D Alignment & Suggestion:** OpenAI API key (same VLM runs both the numeric alignment score and the suggestion generator)
 
 ### Full Installation (Research Setup)
 
@@ -401,7 +426,7 @@ ls data/my_method/model/save/it0-test/batch_data/
 uv run eval3d-pipeline prepare-mesh ./model.obj --full
 ```
 
-**Text-3D returns "Error: API key not set"**
+**Text-3D Alignment/Suggestion returns "Error: API key not set"**
 ```bash
 export OPENAI_API_KEY=sk-...
 ```

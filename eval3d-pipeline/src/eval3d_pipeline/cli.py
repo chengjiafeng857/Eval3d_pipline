@@ -11,6 +11,7 @@ from .asset_preparation import AssetDescriptor, discover_obx_assets, prepare_obx
 from .config import get_settings
 from .runner import run_all_metrics_for_algorithm, run_all_metrics_for_asset
 from .summary import print_summary_table, write_summary_csv, write_summary_json
+from .metrics import text3d
 
 app = typer.Typer(help="Eval3D pipeline for 3D assets (.obj, .glb, .ply, .obx).")
 console = Console()
@@ -133,10 +134,10 @@ def render_video(
     mesh_file: Path = typer.Argument(..., exists=True, readable=True, help="Path to 3D mesh file (.obj, .glb, .ply, etc.)"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output video path (default: <mesh_name>/video/turntable.mp4)"),
     n_frames: int = typer.Option(60, "--frames", "-f", help="Number of frames in the video"),
-    size: int = typer.Option(512, "--size", "-s", help="Frame size (square)"),
+    size: int = typer.Option(1024, "--size", "-s", help="Frame size (square)"),
     fps: int = typer.Option(30, "--fps", help="Frames per second"),
-    distance: float = typer.Option(2.5, "--distance", "-d", help="Camera distance from object"),
-    elevation: float = typer.Option(20.0, "--elevation", "-e", help="Camera elevation in degrees"),
+    distance: float = typer.Option(1.8, "--distance", "-d", help="Camera distance from object"),
+    elevation: float = typer.Option(15.0, "--elevation", "-e", help="Camera elevation in degrees"),
 ) -> None:
     """Render a turntable video from a 3D mesh file.
 
@@ -175,9 +176,9 @@ def render_views_cmd(
     mesh_file: Path = typer.Argument(..., exists=True, readable=True, help="Path to 3D mesh file (.obj, .glb, .ply, etc.)"),
     output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Output directory for renders"),
     n_views: int = typer.Option(120, "--views", "-n", help="Number of views to render"),
-    size: int = typer.Option(512, "--size", "-s", help="Image size (square)"),
-    distance: float = typer.Option(2.5, "--distance", "-d", help="Camera distance from object"),
-    elevation: float = typer.Option(20.0, "--elevation", "-e", help="Camera elevation in degrees"),
+    size: int = typer.Option(1024, "--size", "-s", help="Image size (square)"),
+    distance: float = typer.Option(1.8, "--distance", "-d", help="Camera distance from object"),
+    elevation: float = typer.Option(15.0, "--elevation", "-e", help="Camera elevation in degrees"),
 ) -> None:
     """Render multi-view images from a 3D mesh file.
 
@@ -357,7 +358,7 @@ def eval_mesh(
     questions_exist = (asset_folder / "questions" / "questions.json").exists()
     batch_data_exists = (asset_folder / "save" / "it0-test" / "batch_data").exists()
 
-    if metrics is None:
+    if not metrics:
         metrics = []
         if video_exists:
             metrics.append("aesthetics")
@@ -376,6 +377,85 @@ def eval_mesh(
 
     results = run_all_metrics_for_asset(asset_id, metrics=metrics, settings=settings)
     print_summary_table({asset_id: results})
+
+
+@app.command("suggest")
+def suggest(
+    asset_path: Path = typer.Argument(..., exists=True, readable=True, help="Path to asset folder or mesh file"),
+    prompt: Optional[str] = typer.Option(None, "--prompt", "-p", help="Text prompt describing the 3D model"),
+    algorithm_name: Optional[str] = typer.Option(None, "--algorithm-name", "--algo"),
+    n_frames: int = typer.Option(12, "--frames", "-f", help="Number of frames to analyze"),
+) -> None:
+    """Get detailed improvement suggestions for a 3D model using GPT-4o.
+    
+    This analyzes your 3D model and provides feedback on:
+    1. Geometry flaws (mesh quality, proportions, artifacts)
+    2. Texture flaws (UV mapping, material consistency)
+    3. Multi-view consistency (Janus face, view-dependent issues)
+    4. Semantic reasonableness (does it make sense?)
+    5. Prompt-specific questions (auto-generated based on your prompt)
+    
+    Requires OPENAI_API_KEY to be set in environment or .env file.
+    
+    Examples:
+        eval3d-pipeline suggest ./my_algo/robot/ --prompt "a cute robot"
+        eval3d-pipeline suggest ./model.obj --prompt "a medieval castle"
+    """
+    settings = _apply_algorithm_override(algorithm_name)
+    
+    if not settings.openai_api_key:
+        console.print("[red]Error: OPENAI_API_KEY not set[/red]")
+        console.print("[yellow]Set it in your .env file or environment variables[/yellow]")
+        raise typer.Exit(code=1)
+    
+    # Determine asset folder
+    if asset_path.is_file():
+        # It's a mesh file - need to prepare it first
+        if asset_path.suffix.lower() in SUPPORTED_MESH_EXTENSIONS:
+            try:
+                from .render_asset import prepare_asset_for_eval3d
+            except ImportError:
+                console.print("[red]Rendering requires additional dependencies.[/red]")
+                console.print("[yellow]Install with:[/yellow] uv pip install trimesh pyrender opencv-python PyOpenGL")
+                raise typer.Exit(code=1)
+            
+            asset_id = asset_path.stem
+            console.print(f"[blue]Preparing mesh for analysis...[/blue]")
+            
+            asset_folder = prepare_asset_for_eval3d(
+                mesh_path=asset_path,
+                data_path=settings.data_path,
+                algorithm_name=settings.default_algorithm_name,
+                asset_id=asset_id,
+                render_video=True,
+                render_full_eval3d=False,  # Only need video for suggestions
+            )
+        else:
+            console.print(f"[red]Unsupported file type: {asset_path.suffix}[/red]")
+            raise typer.Exit(code=1)
+    else:
+        asset_folder = asset_path
+    
+    # Check for video
+    video_path = asset_folder / "video" / "turntable.mp4"
+    if not video_path.exists():
+        console.print(f"[red]No turntable video found at {video_path}[/red]")
+        console.print("[yellow]Run 'eval3d-pipeline render-video' first, or use 'eval3d-pipeline prepare-mesh'[/yellow]")
+        raise typer.Exit(code=1)
+    
+    # Run suggestions
+    result = text3d.compute_text3d_suggestions(
+        asset_folder=asset_folder,
+        prompt=prompt,
+        settings=settings,
+        n_frames=n_frames,
+    )
+    
+    if result is None:
+        console.print("[red]Analysis failed[/red]")
+        raise typer.Exit(code=1)
+    
+    console.print("\n[green]✓ Analysis complete![/green]")
 
 
 @app.command("info")

@@ -29,7 +29,6 @@ def run_all_metrics_for_asset(
     asset_id: str,
     metrics: Optional[List[str]] = None,
     settings: Optional[Settings] = None,
-    geometric_ran: bool = False,
 ) -> Dict[str, Optional[float]]:
     """Run selected metrics for a single asset and return score mapping."""
     settings = settings or get_settings()
@@ -41,10 +40,8 @@ def run_all_metrics_for_asset(
     for metric in metrics:
         if metric == "geometric":
             try:
-                if not geometric_ran:
-                    geometric.evaluate_geometric_for_algorithm(settings)
-                metric_file = asset_folder / "geometric_consistency_metric.txt"
-                results["geometric"] = _parse_metric_file(metric_file)
+                # Use integrated geometric metric (no external preprocessing needed)
+                results["geometric"] = geometric.compute_geometric_for_asset(asset_folder)
             except Exception as exc:  # noqa: BLE001
                 console.print(f"[yellow]Geometric metric skipped[/yellow]: {exc}")
                 results["geometric"] = None
@@ -66,6 +63,16 @@ def run_all_metrics_for_asset(
             results["aesthetics"] = aesthetics.compute_aesthetics_for_asset(asset_folder)
         elif metric == "text3d":
             results["text3d"] = text3d.compute_text3d_for_asset(asset_folder, settings=settings)
+        elif metric == "suggestions":
+            # Run the GPT-4o suggestion pipeline
+            suggestion_result = text3d.compute_text3d_suggestions(asset_folder, settings=settings)
+            if suggestion_result:
+                # Extract overall score if available
+                sections = suggestion_result.get("sections", {})
+                overall = sections.get("overall", {})
+                results["suggestions"] = overall.get("score")
+            else:
+                results["suggestions"] = None
         else:
             console.print(f"[yellow]Unknown metric '{metric}'[/yellow]")
             results[metric] = None
@@ -87,21 +94,11 @@ def run_all_metrics_for_algorithm(
     asset_ids = sorted([p.name for p in algo_dir.iterdir() if p.is_dir()]) if algo_dir.exists() else []
 
     results: Dict[str, Dict[str, Optional[float]]] = {}
-    geometric_ran = False
-    if "geometric" in metrics:
-        try:
-            geometric.evaluate_geometric_for_algorithm(settings)
-            geometric_ran = True
-        except Exception as exc:  # noqa: BLE001
-            console.print(f"[yellow]Geometric evaluation failed for algorithm[/yellow]: {exc}")
-            geometric_ran = False
-
     for asset_id in asset_ids:
         results[asset_id] = run_all_metrics_for_asset(
             asset_id,
             metrics=metrics,
             settings=settings,
-            geometric_ran=geometric_ran,
         )
 
     return results

@@ -464,10 +464,10 @@ def render_turntable_video(
     mesh_path: Path,
     output_video: Path,
     n_frames: int = 60,
-    image_size: Tuple[int, int] = (512, 512),
+    image_size: Tuple[int, int] = (1024, 1024),  # Higher resolution for better quality
     fps: int = 30,
-    camera_distance: float = 2.5,
-    elevation_deg: float = 20.0,
+    camera_distance: float = 1.8,  # Closer camera to fill frame better
+    elevation_deg: float = 15.0,   # Slightly lower angle for better view
 ) -> Path:
     """Render a turntable video (for aesthetics/text-3D metrics)."""
     if not check_dependencies():
@@ -480,9 +480,25 @@ def render_turntable_video(
     console.print(f"[blue]Loading mesh[/blue]: {mesh_path}")
     mesh = load_mesh(mesh_path)
     
-    if hasattr(mesh.visual, 'vertex_colors') and mesh.visual.vertex_colors is not None:
+    # Check for various visual types: textures, vertex colors, or face colors
+    has_visual = False
+    visual_kind = None
+    if hasattr(mesh, 'visual') and mesh.visual is not None:
+        visual_kind = getattr(mesh.visual, 'kind', None)
+        if visual_kind == 'texture':
+            has_visual = True
+            console.print("[dim]  Visual: texture material detected[/dim]")
+        elif visual_kind == 'vertex' or (hasattr(mesh.visual, 'vertex_colors') and mesh.visual.vertex_colors is not None):
+            has_visual = True
+            console.print("[dim]  Visual: vertex colors detected[/dim]")
+        elif visual_kind == 'face':
+            has_visual = True
+            console.print("[dim]  Visual: face colors detected[/dim]")
+    
+    if has_visual:
         pr_mesh = pyrender.Mesh.from_trimesh(mesh, smooth=True)
     else:
+        console.print("[dim]  Visual: none, using default clay material[/dim]")
         # Use a warm terracotta/clay color for untextured meshes - more visually appealing
         material = pyrender.MetallicRoughnessMaterial(
             baseColorFactor=[0.85, 0.65, 0.55, 1.0],  # Warm terracotta color

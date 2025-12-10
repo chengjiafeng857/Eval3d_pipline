@@ -16,7 +16,8 @@ The official Eval3D was designed for threestudio-generated assets with specific 
 | Metric | Status | What It Measures |
 |--------|--------|------------------|
 | **Aesthetics** | ✅ Works | Visual quality (ImageReward on video frames) |
-| **Text-3D Alignment** | ✅ Works | Does it match the text prompt? (GPT-4o VQA) |
+| **Text-3D Alignment** | ✅ Works | Does it match the text prompt? (GPT-5.1 VQA) |
+| **3D Model Suggestions** | ✅ **NEW** | Detailed qualitative feedback using GPT-5.1 |
 | **Geometric Consistency** | ✅ Works | Texture-geometry alignment (rendered vs depth normals) |
 | **Semantic Consistency** | ✅ Works | DINO feature consistency across views |
 | **Structural Consistency** | ⚠️ Optional | Requires Zero123 model |
@@ -35,7 +36,7 @@ uv sync
 # Install rendering dependencies
 uv pip install trimesh pyrender opencv-python PyOpenGL numpy Pillow torch
 
-# For text-3D alignment
+# For text-3D alignment and suggestions (REQUIRED)
 export OPENAI_API_KEY=your_key_here
 ```
 
@@ -46,10 +47,10 @@ uv run eval3d-pipeline eval-mesh ./robot.obj --algo my_method --prompt "a robot"
 ```
 
 ### What Happens Under the Hood
-1. **Renders 120 views** of your mesh at known camera poses
+1. **Renders 120 views** of your mesh at known camera poses (1024x1024 resolution)
 2. **Generates batch_data** with camera matrices (c2w, proj_mtx, elevation, azimuth)
 3. **Computes normal maps** in world space
-4. **Renders a turntable video**
+4. **Renders a turntable video** (1024x1024 @ 30fps)
 5. **Runs all available metrics**
 
 ---
@@ -67,6 +68,31 @@ uv run eval3d-pipeline eval-mesh ./model.obj --algo my_method --quick
 # Specific metrics only
 uv run eval3d-pipeline eval-mesh ./model.obj -m geometric -m semantic
 ```
+
+### 🆕 NEW: Get AI Suggestions for Your 3D Model
+```bash
+# Comprehensive quality analysis using GPT-5.1
+uv run eval3d-pipeline suggest ./data/my_algo/model/ --prompt "a cute robot"
+
+# Or directly on a mesh file
+uv run eval3d-pipeline suggest ./model.obj --prompt "a medieval castle"
+
+# With more frames for thorough analysis
+uv run eval3d-pipeline suggest ./data/my_algo/model/ --prompt "description" --frames 16
+```
+
+This analyzes your 3D model and provides detailed feedback on:
+1. **Geometry Flaws** - mesh quality, proportions, artifacts
+2. **Texture & Material Flaws** - UV mapping, material consistency
+3. **Multi-View Consistency** - Janus face, view-dependent issues
+4. **Semantic Reasonableness** - does it make sense?
+5. **Prompt-Specific Questions** - auto-generated based on your prompt
+
+Output saved to `text3d_suggestions.json` with:
+- Section-by-section scores (1-10)
+- Key issues identified
+- Improvement suggestions
+- Raw GPT-5.1 analysis
 
 ### Prepare Without Evaluating
 ```bash
@@ -86,8 +112,11 @@ uv run eval3d-pipeline prepare-mesh ./model.obj --algo my_method --full
 
 ### Render Only
 ```bash
-# Just render a turntable video
+# Just render a turntable video (1024x1024 default)
 uv run eval3d-pipeline render-video ./model.obj -o ./output.mp4
+
+# Custom settings
+uv run eval3d-pipeline render-video ./model.obj -o ./output.mp4 --size 2048 --distance 1.5
 
 # Render multi-view images
 uv run eval3d-pipeline render-views ./model.obj -o ./renders/
@@ -144,7 +173,48 @@ These are **standard camera parameters** that we can compute ourselves when rend
 
 **Aesthetics**: Extracts frames from turntable video, scores with ImageReward.
 
-**Text-3D Alignment**: GPT-4o answers yes/no questions about the video frames.
+**Text-3D Alignment**: GPT-5.1 answers yes/no questions about the video frames. Uses majority voting across 12 frames for robust scoring.
+
+**3D Model Suggestions** (NEW): Comprehensive GPT-5.1 analysis providing:
+- Section scores (geometry, texture, consistency, reasonableness)
+- Specific issues identified per category
+- Actionable improvement suggestions
+- Prompt-specific evaluation with custom questions
+
+---
+
+## Text-3D Alignment Details
+
+The text3d metric uses GPT-5.1 VQA to evaluate how well your 3D model matches the text prompt.
+
+### How It Works
+1. Extracts 12 key frames from the turntable video
+2. Asks 5 yes/no questions per frame:
+   - Does this match the prompt description?
+   - Is the object complete?
+   - Is the texture consistent?
+   - Is the geometry smooth?
+   - Does it look realistic?
+3. Uses **majority voting** across all 12 frames for each question
+4. Final score = percentage of "yes" answers
+
+### Output Format (`text3d_results.json`)
+```json
+{
+  "questions": { "1": "...", "2": "...", ... },
+  "final_answers": { "1": "yes", "2": "no", ... },
+  "vote_breakdown": {
+    "1": { "yes": 8, "no": 4, "final": "yes" },
+    "2": { "yes": 3, "no": 9, "final": "no" }
+  },
+  "per_frame_answers": [
+    { "1": "yes", "2": "yes", ... },  // Frame 0
+    { "1": "no", "2": "yes", ... },   // Frame 1
+    ...
+  ],
+  "score": 60.0
+}
+```
 
 ---
 
@@ -168,12 +238,31 @@ python evaluate.py --base_dir $EVAL3D_DATA_PATH --algorithm_name my_algo
 
 ## Example Output
 
+### Metric Scores
 ```
 ┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━┓
 ┃ asset_id     ┃ geometric  ┃ semantic   ┃ aesthetics  ┃ text3d ┃
 ┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━┩
-│ robot        │ 85.23      │ 78.45      │ 0.7523      │ -      │
+│ robot        │ 85.23      │ 78.45      │ 0.7523      │ 80.0   │
 └──────────────┴────────────┴────────────┴─────────────┴────────┘
+```
+
+### Text-3D Vote Breakdown
+```
+Running VQA (gpt-5.1) on 12 frames...
+  Processing frame 1/12...
+    → Q1:yes, Q2:yes, Q3:yes, Q4:yes, Q5:no
+  Processing frame 2/12...
+    → Q1:no, Q2:yes, Q3:yes, Q4:yes, Q5:yes
+  ...
+
+Vote breakdown by question:
+  Q1: 4 yes / 8 no → no
+  Q2: 12 yes / 0 no → yes
+  Q3: 12 yes / 0 no → yes
+  Q4: 12 yes / 0 no → yes
+  Q5: 2 yes / 10 no → no
+Text-3D alignment score: 60.0%
 ```
 
 ---
@@ -196,11 +285,44 @@ Make sure you ran with `--full` flag to generate batch_data. Check that:
 - `<asset>/save/it0-test/batch_data/` exists
 - `<asset>/save/it0-test/rgb_images/` has 120 images
 
+### Video quality is low / model looks like clay
+- Ensure your mesh has texture files (MTL + PNG/JPG) in the same directory as the OBJ
+- Check that the OBJ's `mtllib` line points to the correct MTL file
+- For GLB files, textures should be embedded automatically
+
+### Text-3D or Suggestions fail with API error
+- Ensure `OPENAI_API_KEY` is set in your environment or `.env` file
+- GPT-5.1 requires `max_completion_tokens` (not `max_tokens`)
+- Temperature parameter is not supported with GPT-5.1 reasoning mode
+
 ### Zero123 / Structural Consistency
 Structural consistency requires running Zero123 to generate novel views. This requires:
 1. Download [Stable Zero123 checkpoint](https://huggingface.co/stabilityai/stable-zero123)
 2. Install Zero123 dependencies
 3. This metric is optional - the others work without it
+
+---
+
+## Recent Updates (Dec 2024)
+
+### Video Rendering Quality
+- **Resolution**: Increased from 512x512 to **1024x1024**
+- **Camera Distance**: Reduced from 2.5 to **1.8** (model fills frame better)
+- **Elevation**: Adjusted from 20° to **15°** for better viewing angle
+- **Texture Detection**: Now properly detects texture materials (not just vertex colors)
+
+### Text-3D Alignment
+- **Model Upgrade**: Now uses **GPT-5.1** instead of GPT-4o/GPT-5-mini
+- **Detailed Logging**: Shows answers for each frame during processing
+- **Vote Breakdown**: Displays yes/no counts per question
+- **Extended Output**: Saves `per_frame_answers` and `vote_breakdown` to JSON
+- **Increased Token Limit**: 1500 tokens to handle long prompts
+
+### 3D Model Suggestions (NEW)
+- Comprehensive qualitative analysis using GPT-5.1
+- Auto-generates prompt-specific questions
+- Structured output with scores and suggestions per section
+- Saves extracted frames for inspection
 
 ---
 
